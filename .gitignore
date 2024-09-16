@@ -22,4 +22,17 @@ go.work
 go.work.sum
 
 # env file
-.env
+*.env
+!*.example.env
+
+
+# dev setup
+.air.toml
+.vscode
+__debug*
+
+
+# logs
+*.log
+dummy.go
+todos.txt
