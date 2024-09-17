@@ -12,7 +12,7 @@ var Logger *zap.SugaredLogger
 
 // init is a function that is automatically executed before the main function is called.
 func init() {
-	makeLogFile()
+	// makeLogFile()
 	setUpLogger()
 }
 
@@ -28,18 +28,19 @@ func makeLogFile() {
 func setUpLogger() {
 	var cfg zap.Config
 
+	// "./logs/app.log" is removed from outputPaths
+	//  "errorOutputPaths": [
+	// 	"stderr"
+	// 	], also removed
 	formatJson := []byte(
 		`
 		{
 			"level": "debug",
 			"encoding": "json",
 			"outputPaths": [
-				"stdout",
-				"./logs/app.log"
+				"stdout"
 			],
-			"errorOutputPaths": [
-				"stderr"
-			],
+			
 			"encoderConfig": {
 				"messageKey": "message",
 				"levelKey": "level",
@@ -60,5 +61,5 @@ func setUpLogger() {
 	}
 
 	Logger = zap.Must(cfg.Build()).Sugar()
-	defer Logger.Sync()
+	
 }

@@ -2,20 +2,31 @@ package configs
 
 import (
 	"log"
+	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 )
 
 // Config struct to hold configuration variables
 type Config struct {
-	AppPort    string `mapstructure:"APP_PORT"` 
-	MongoDbUri string `mapstructure:"MONGO_DB_URI"`
+	AppEnvironment string `mapstructure:"APP_ENVIRONMENT"`
+	AppPort        string `mapstructure:"APP_PORT"`
+	MongoDbUri     string `mapstructure:"MONGO_DB_URI"`
 }
 
 var ENV = Config{} // ENV variable to hold the configuration values
 
 func init() {
+
 	LoadConfig(".") // Initialize the configuration by loading the config file from the project path
+
+	// setup gin mode
+	if strings.EqualFold(ENV.AppEnvironment, "prod") {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
 }
 
 // LoadConfig loads configuration from a specified path
