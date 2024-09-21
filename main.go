@@ -13,7 +13,6 @@ import (
 func main() {
 	defer db.DisconnectDB()
 	defer utils.Logger.Sync()
-
 	utils.Logger.Info("Service Started!!")
 
 	router := gin.New()

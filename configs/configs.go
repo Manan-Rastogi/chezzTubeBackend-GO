@@ -10,9 +10,12 @@ import (
 
 // Config struct to hold configuration variables
 type Config struct {
-	AppEnvironment string `mapstructure:"APP_ENVIRONMENT"`
-	AppPort        string `mapstructure:"APP_PORT"`
-	MongoDbUri     string `mapstructure:"MONGO_DB_URI"`
+	AppEnvironment      string `mapstructure:"APP_ENVIRONMENT"`
+	AppPort             string `mapstructure:"APP_PORT"`
+	MongoDbUri          string `mapstructure:"MONGO_DB_URI"`
+	CloudinaryCloudName string `mapstructure:"CLOUDINARY_CLOUD_NAME"`
+	CloudinaryApiKey    string `mapstructure:"CLOUDINARY_API_KEY"`
+	CloudinaryApiSecret string `mapstructure:"CLOUDINARY_API_SECRET"`
 }
 
 var ENV = Config{} // ENV variable to hold the configuration values
