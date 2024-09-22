@@ -24,6 +24,14 @@ var ServiceCodes = map[int]string{
 	1017: "unable to read coverImage file. Please try again.",
 	1018: "coverImage file is required.",
 	1019: "fullName cannot exceed 64 characters.",
+	1020: "failed to upload avatar file. Please try again.",
+	1021: "failed to upload coverImage file. Please try again.",
+	1022: "failed to generate tokens.",
+
+	// DB ERRORS
+	2001:"unexpected error occured. Failed to register user",
+
+
 	5000: "unexpected error occured. please contact admin.",
 }
 

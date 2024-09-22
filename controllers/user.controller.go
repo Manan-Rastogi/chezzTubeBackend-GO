@@ -1,18 +1,23 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Manan-Rastogi/chezzTubeBackend-GO/auth"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/cloudinary"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/configs"
+	"github.com/Manan-Rastogi/chezzTubeBackend-GO/db"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/models"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/utils"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/validators"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -80,6 +85,8 @@ func (uc *userController) RegisterUser(ctx *gin.Context) {
 
 	wg.Add(1)
 	go validators.CheckUsernameAndEmailExists(userInput.UserName, userInput.Email, &wg, userEmailExistChannel)
+
+	///////////////////////////////// Password Check and Encrypt Password.
 
 	// Fullname is a non essential field
 	if utils.IsFormKeyPresent("fullName", data) {
@@ -168,10 +175,116 @@ func (uc *userController) RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	// Create Access and Refresh Token in Meantime
-	
+	// with urls of images register user
+	wg.Done()
+	avatarUpload := <-avatarChan
+	coverImageUpload := <-coverImageChan
+
+	if utils.IsFormFileKeyPresent("avatar", files) {
+		if avatarUpload.Err != nil {
+			respondErr(ctx, http.StatusInternalServerError, 1020)
+			return
+		}
+		userInput.Avatar = avatarUpload.SecureUrl
+	}
+
+	if coverImageUpload.Err != nil {
+		respondErr(ctx, http.StatusInternalServerError, 1021)
+		return
+	} else {
+		userInput.CoverImage = &coverImageUpload.SecureUrl
+	}
+
+	// now send to DB
+	userInput.CreatedAt = time.Now().Local()
+	userCollection := db.Client.Database(configs.DB_NAME).Collection("users")
+
+	userResult, err := userCollection.InsertOne(context.Background(), userInput)
+	if err != nil {
+		utils.Logger.Error(err.Error())
+		respondErr(ctx, 500, 2001)
+		return
+	}
+
+	userInput.Id, _ = userResult.InsertedID.(primitive.ObjectID) // assuming entry is done. else handle another error
+
+	// Create Access and Refresh Token in after registering user
+	accessTokenChan := make(chan auth.JwtToken)
+	refreshTokenChan := make(chan auth.JwtToken)
+
+	wg.Add(1)
+	accessContext, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	go auth.CreateNewToken(accessContext, userInput.Id.String(), userInput.UserName, userInput.Email, 24*time.Hour, "access", accessTokenChan, &wg)
+
+	wg.Add(1)
+	refreshContext, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	go auth.CreateNewToken(refreshContext, userInput.Id.String(), userInput.UserName, userInput.Email, 7*24*time.Hour, "refresh", refreshTokenChan, &wg)
+
+	wg.Done()
+	accessToken := <-accessTokenChan
+	refreshToken := <-refreshTokenChan
+
+	if accessToken.Err != nil || refreshToken.Err != nil {
+		// Delete user from DB
+		_, err := userCollection.DeleteOne(context.Background(), bson.D{
+			{Key: "_id", Value: userInput.Id},
+		})
+		if err != nil {
+			// Handle the error, e.g., trigger a mail to admin or queue the delete operation
+			// You can also log the error or take appropriate action based on your application's requirements
+			utils.Logger.Error(err.Error())
+		}
+		respondErr(ctx, http.StatusInternalServerError, 1022)
+		return
+	}
+
+	// Update Refresh Token Channel in DB
+	userInput.RefreshToken = &refreshToken.Token
+	userInput.UpdatedAt = time.Now().Local()
+	// Assuming userCollection is an instance of a collection from the database
+	filter := bson.M{"_id": userInput.Id}
+	update := bson.M{
+		"$set": bson.M{
+			"refreshToken": userInput.RefreshToken,
+			"updatedAt":    userInput.UpdatedAt,
+		},
+	}
+	_, err = userCollection.UpdateByID(context.Background(), filter, update)
+	if err != nil {
+		// Delete user from DB
+		_, err := userCollection.DeleteOne(context.Background(), bson.D{
+			{Key: "_id", Value: userInput.Id},
+		})
+		if err != nil {
+			// Handle the error, e.g., trigger a mail to admin or queue the delete operation
+			// You can also log the error or take appropriate action based on your application's requirements
+			utils.Logger.Error(err.Error())
+		}
+		respondErr(ctx, http.StatusInternalServerError, 1022)
+		return
+	}
+
+	// Set Cookies
+	// Set Bearer token in Cookies
+	ctx.SetCookie("accessToken", "Bearer "+accessToken.Token, -1, "", "", true, true)
+	ctx.SetCookie("refreshToken", "Bearer "+refreshToken.Token, -1, "", "", true, true)
+
+	// Resonse to User.
+	response := map[string]interface{}{
+		"user":         userInput,
+		"msg":          "user registered successfully.",
+		"accessToken":  "Bearer " + accessToken.Token,  // Tokens are sned here as well for mobile applns as they cannot access cookies.
+		"refreshToken": "Bearer " + refreshToken.Token,
+	}
+	respond(ctx, response, http.StatusCreated, 1)
 
 }
+
+
+// Login API
+
 
 func (uc *userController) GetUserById(ctx *gin.Context) {
 

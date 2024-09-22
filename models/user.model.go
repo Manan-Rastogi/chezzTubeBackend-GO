@@ -16,8 +16,8 @@ type Users struct {
 	CoverImage   *string              `bson:"coverImage" json:"coverImage"`
 	Password     string               `bson:"password" json:"-"`
 	RefreshToken *string              `bson:"refreshToken" json:"-"`
-	CreatedAt    *time.Time           `bson:"createdAt" json:"createdAt"`
-	UpdatedAt    *time.Time           `bson:"updatedAt" json:"updatedAt"`
+	CreatedAt    time.Time           `bson:"createdAt" json:"createdAt"`
+	UpdatedAt    time.Time           `bson:"updatedAt" json:"-"`
 }
 
 type UserEmailCheck struct {
