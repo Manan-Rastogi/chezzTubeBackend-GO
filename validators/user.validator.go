@@ -5,6 +5,7 @@ import (
 	"net/mail"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/configs"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/db"
@@ -49,4 +50,26 @@ func CheckUsernameAndEmailExists(username, email string, wg *sync.WaitGroup, out
 		UserData: userExists,
 		Err:      err,
 	}
+	close(output)
+}
+
+// Password must have a spl character, 1 lower, 1 uppercase and must be greater than 8 characters.
+func ValidateUserPassword(password string) bool {
+	if len(password) < 8 || len(password) > 25 {
+		return false
+	}
+
+	var hasUpper, hasLower, hasSpecial bool
+	for _, char := range password {
+		switch {
+		case unicode.IsUpper(char):
+			hasUpper = true
+		case unicode.IsLower(char):
+			hasLower = true
+		case unicode.IsPunct(char) || unicode.IsSymbol(char):
+			hasSpecial = true
+		}
+	}
+
+	return hasUpper && hasLower && hasSpecial
 }

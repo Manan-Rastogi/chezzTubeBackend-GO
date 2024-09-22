@@ -43,7 +43,6 @@ func credentials() *cloudinary.Cloudinary {
 // Returns the secure URL of the uploaded image.
 func UploadImage(cld *cloudinary.Cloudinary, wg *sync.WaitGroup, timeout time.Duration, file interface{}, publicId string, output chan models.ImageUploadChan) {
 	defer wg.Done()
-	defer close(output)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -67,6 +66,7 @@ func UploadImage(cld *cloudinary.Cloudinary, wg *sync.WaitGroup, timeout time.Du
 		SecureUrl: secureUrl,
 		Err:       err,
 	}
+	close(output)
 }
 
 // DestroyImage deletes an image using Cloudinary and sync.WaitGroup
