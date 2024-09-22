@@ -24,3 +24,8 @@ type UserEmailCheck struct {
 	UserData Users
 	Err      error
 }
+
+type ImageUploadChan struct {
+	SecureUrl string
+	Err       error
+}

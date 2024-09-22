@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/configs"
+	"github.com/Manan-Rastogi/chezzTubeBackend-GO/models"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/utils"
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/cloudinary/cloudinary-go/v2/api"
@@ -40,11 +41,14 @@ func credentials() *cloudinary.Cloudinary {
 // - file: the image file to upload
 // - publicId: the public ID for the uploaded image
 // Returns the secure URL of the uploaded image.
-func UploadImage(cld *cloudinary.Cloudinary, wg *sync.WaitGroup, timeout time.Duration, file interface{}, publicId string) string {
+func UploadImage(cld *cloudinary.Cloudinary, wg *sync.WaitGroup, timeout time.Duration, file interface{}, publicId string, output chan models.ImageUploadChan) {
 	defer wg.Done()
+	defer close(output)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
+	secureUrl := ""
 
 	// Upload the image.
 	// Set the asset's public ID and allow overwriting the asset with new versions
@@ -54,10 +58,15 @@ func UploadImage(cld *cloudinary.Cloudinary, wg *sync.WaitGroup, timeout time.Du
 		Overwrite:      api.Bool(true)})
 	if err != nil {
 		utils.Logger.Error(err.Error())
+	} else {
+		secureUrl = resp.SecureURL
 	}
 
 	// Log the delivery URL
-	return resp.SecureURL
+	output <- models.ImageUploadChan{
+		SecureUrl: secureUrl,
+		Err:       err,
+	}
 }
 
 // DestroyImage deletes an image using Cloudinary and sync.WaitGroup

@@ -10,8 +10,8 @@ import (
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/db"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/models"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/utils"
-	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // IsValidEmail verifies if the provided email address is valid.
@@ -26,11 +26,10 @@ func IsValidEmail(email string) bool {
 }
 
 // Check in DB for unique email  AND  Check in DB for unique username
-func CheckUsernameAndEmailExists(username, email string, wg *sync.WaitGroup, ctx *gin.Context, output chan models.UserEmailCheck) {
+func CheckUsernameAndEmailExists(username, email string, wg *sync.WaitGroup, output chan models.UserEmailCheck) {
 	defer wg.Done()
-
 	userCollection := db.Client.Database(configs.DB_NAME).Collection("users")
-	
+
 	filter := bson.D{
 		{Key: "$or", Value: bson.A{
 			bson.D{{Key: "username", Value: username}},
@@ -38,16 +37,16 @@ func CheckUsernameAndEmailExists(username, email string, wg *sync.WaitGroup, ctx
 		}},
 	}
 
-	ctxx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctxx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var userExists models.Users
 	err := userCollection.FindOne(ctxx, filter).Decode(&userExists)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		utils.Logger.Error(err.Error())
 	}
 
 	output <- models.UserEmailCheck{
 		UserData: userExists,
-		Err: err,
+		Err:      err,
 	}
 }

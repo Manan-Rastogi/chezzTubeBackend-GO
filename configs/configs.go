@@ -16,6 +16,8 @@ type Config struct {
 	CloudinaryCloudName string `mapstructure:"CLOUDINARY_CLOUD_NAME"`
 	CloudinaryApiKey    string `mapstructure:"CLOUDINARY_API_KEY"`
 	CloudinaryApiSecret string `mapstructure:"CLOUDINARY_API_SECRET"`
+	AvatarMaxSize       int64  `mapstructure:"AVATAR_MAX_SIZE"`
+	CoverImageMaxSize   int64  `mapstructure:"COVERIMAGE_MAX_SIZE"`
 }
 
 var ENV = Config{} // ENV variable to hold the configuration values
