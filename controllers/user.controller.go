@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Manan-Rastogi/chezzTubeBackend-GO/auth"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/cloudinary"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/configs"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/db"
@@ -15,12 +16,15 @@ import (
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/utils"
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/validators"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserController interface {
 	RegisterUser(ctx *gin.Context)
+	Login(ctx *gin.Context)
 	GetUserById(ctx *gin.Context)
 }
 
@@ -79,7 +83,7 @@ func (uc *userController) RegisterUser(ctx *gin.Context) {
 	// email username exist check
 	userEmailExist := models.UserEmailCheck{}
 	userEmailExistChannel := make(chan models.UserEmailCheck)
-	
+
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -135,7 +139,7 @@ func (uc *userController) RegisterUser(ctx *gin.Context) {
 	// User is Validated.. we can register the user now - uploadimages , create tokens and update DB
 
 	avatarChan := make(chan models.ImageUploadChan)
-	
+
 	if utils.IsFormFileKeyPresent("avatar", files) {
 		avatar := files["avatar"][0]
 
@@ -159,11 +163,13 @@ func (uc *userController) RegisterUser(ctx *gin.Context) {
 		wg.Add(1)
 		go cloudinary.UploadImage(cloudinary.CLOUDINARY, &wg, 30*time.Second, avatarFile, userInput.UserName+"_avatar", avatarChan)
 	} else {
-		go func() {    // need to send something to channel before closing
+		go func() { // need to send something to channel to avoid deadlock
 			avatarChan <- models.ImageUploadChan{
 				SecureUrl: "",
 				Err:       nil,
 			}
+
+			close(avatarChan)
 		}()
 	}
 	// avatar is non essential
@@ -241,68 +247,121 @@ func (uc *userController) RegisterUser(ctx *gin.Context) {
 
 // Login API
 
-// // Create Access and Refresh Token in after registering user
-// accessTokenChan := make(chan auth.JwtToken)
-// refreshTokenChan := make(chan auth.JwtToken)
+func (c *userController) Login(ctx *gin.Context) {
+	// 1. Validate username/email + passowrd
+	// 2. On Success - create access and refresh token
+	// 3. Set refresh token in DB
+	// 4. Set Cookies and return
+	// Cases - already logged in? access token expire? refresh token expire?
 
-// wg.Add(1)
-// accessContext, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-// defer cancel()
-// go auth.CreateNewToken(accessContext, userInput.Id.String(), userInput.UserName, userInput.Email, 24*time.Hour, "access", accessTokenChan, &wg)
+	user := models.LoginUser{}
 
-// wg.Add(1)
-// refreshContext, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-// defer cancel()
-// go auth.CreateNewToken(refreshContext, userInput.Id.String(), userInput.UserName, userInput.Email, 7*24*time.Hour, "refresh", refreshTokenChan, &wg)
+	err := ctx.ShouldBindJSON(&user)
+	if err != nil {
+		utils.Logger.Error(err.Error())
+		respondErr(ctx, http.StatusBadRequest, 1026)
+		return
+	}
 
-// wg.Done()
-// accessToken := <-accessTokenChan
-// refreshToken := <-refreshTokenChan
+	if user.UserName == "" || user.Password == "" {
+		respondErr(ctx, http.StatusBadRequest, 1027)
+		return
+	}
 
-// if accessToken.Err != nil || refreshToken.Err != nil {
-// 	// Delete user from DB
-// 	_, err := userCollection.DeleteOne(context.Background(), bson.D{
-// 		{Key: "_id", Value: userInput.Id},
-// 	})
-// 	if err != nil {
-// 		// Handle the error, e.g., trigger a mail to admin or queue the delete operation
-// 		// You can also log the error or take appropriate action based on your application's requirements
-// 		utils.Logger.Error(err.Error())
-// 	}
-// 	respondErr(ctx, http.StatusInternalServerError, 1022)
-// 	return
-// }
+	user.UserName = strings.ToLower(user.UserName)
 
-// // Update Refresh Token Channel in DB
-// userInput.RefreshToken = &refreshToken.Token
-// userInput.UpdatedAt = time.Now().Local()
-// // Assuming userCollection is an instance of a collection from the database
-// filter := bson.M{"_id": userInput.Id}
-// update := bson.M{
-// 	"$set": bson.M{
-// 		"refreshToken": userInput.RefreshToken,
-// 		"updatedAt":    userInput.UpdatedAt,
-// 	},
-// }
-// _, err = userCollection.UpdateByID(context.Background(), filter, update)
-// if err != nil {
-// 	// Delete user from DB
-// 	_, err := userCollection.DeleteOne(context.Background(), bson.D{
-// 		{Key: "_id", Value: userInput.Id},
-// 	})
-// 	if err != nil {
-// 		// Handle the error, e.g., trigger a mail to admin or queue the delete operation
-// 		// You can also log the error or take appropriate action based on your application's requirements
-// 		utils.Logger.Error(err.Error())
-// 	}
-// 	respondErr(ctx, http.StatusInternalServerError, 1022)
-// 	return
-// }
+	// verify valid user.. then verify password
+	userCollection := db.Client.Database(configs.DB_NAME).Collection("users")
 
-// // Set Cookies
-// // Set Bearer token in Cookies
-// ctx.SetCookie("accessToken", "Bearer "+accessToken.Token, -1, "", "", true, true)
-// ctx.SetCookie("refreshToken", "Bearer "+refreshToken.Token, -1, "", "", true, true)
+	contextMongoSearch, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	userResult := userCollection.FindOne(contextMongoSearch, bson.D{{Key: "username", Value: user.UserName}})
+
+	if userResult.Err() != nil {
+		utils.Logger.Error(userResult.Err().Error())
+		if userResult.Err() == mongo.ErrNoDocuments {
+			respondErr(ctx, http.StatusNotFound, 1028)
+			return
+		} else if os.IsTimeout(userResult.Err()) {
+			respondErr(ctx, http.StatusGatewayTimeout, 5001)
+			return
+		} else {
+			respondErr(ctx, http.StatusInternalServerError, 5000)
+			return
+		}
+	}
+
+	userData := models.Users{}
+	err = userResult.Decode(&userData)
+	if err != nil {
+		utils.Logger.Error(err.Error())
+		respondErr(ctx, http.StatusInternalServerError, 5000)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(userData.Password), []byte(user.Password))
+	if err != nil {
+		utils.Logger.Error(err.Error())
+		respondErr(ctx, http.StatusUnauthorized, 1029)
+		return
+	}
+
+	// Create Access and Refresh Token in after registering user
+	wg := sync.WaitGroup{}
+	accessTokenChan := make(chan auth.JwtToken)
+	refreshTokenChan := make(chan auth.JwtToken)
+
+	wg.Add(1)
+	accessContext, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	go auth.CreateNewToken(accessContext, userData.Id.String(), userData.UserName, userData.Email, 24*time.Hour, "access", accessTokenChan, &wg)
+
+	wg.Add(1)
+	refreshContext, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	go auth.CreateNewToken(refreshContext, userData.Id.String(), userData.UserName, userData.Email, 7*24*time.Hour, "refresh", refreshTokenChan, &wg)
+
+	accessToken := <-accessTokenChan
+	refreshToken := <-refreshTokenChan
+	wg.Wait()
+
+	if accessToken.Err != nil || refreshToken.Err != nil {
+		utils.Logger.Error(accessToken.Err)
+		utils.Logger.Error(accessToken.Err)
+		respondErr(ctx, http.StatusInternalServerError, 1022)
+		return
+	}
+
+	// Update Refresh Token Channel in DB
+	userData.RefreshToken = &refreshToken.Token
+	userData.UpdatedAt = time.Now().Local()
+	// Assuming userCollection is an instance of a collection from the database
+	filter := bson.M{"_id": userData.Id}
+	update := bson.M{
+		"$set": bson.M{
+			"refreshToken": userData.RefreshToken,
+			"updatedAt":    userData.UpdatedAt,
+		},
+	}
+	_, err = userCollection.UpdateByID(context.Background(), filter, update)
+	if err != nil {
+		respondErr(ctx, http.StatusInternalServerError, 1022)
+		return
+	}
+
+	// Set Cookies
+	// Set Bearer token in Cookies
+	ctx.SetCookie("accessToken", "Bearer "+accessToken.Token, -1, "", "", true, true)
+	ctx.SetCookie("refreshToken", "Bearer "+refreshToken.Token, -1, "", "", true, true)
+
+	response := map[string]interface{}{
+		"user":         userData,
+		"msg":          "log in successful!",
+		"accessToken":  "Bearer " + accessToken.Token,
+		"refreshToken": "Bearer " + refreshToken.Token,
+	}
+	respond(ctx, response, http.StatusOK, 1)
+}
 
 func (uc *userController) GetUserById(ctx *gin.Context) {
 

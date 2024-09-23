@@ -51,9 +51,9 @@ func CreateNewToken(ctx context.Context, id, username, email string, expirationT
 		return
 	default:
 		if strings.EqualFold(subject, "refresh") {
-			ss, err = token.SignedString(configs.ENV.JwtRefreshKey)
+			ss, err = token.SignedString([]byte(configs.ENV.JwtRefreshKey))
 		} else {
-			ss, err = token.SignedString(configs.ENV.JwtAccessKey)
+			ss, err = token.SignedString([]byte(configs.ENV.JwtAccessKey))
 		}
 	}
 
@@ -61,4 +61,5 @@ func CreateNewToken(ctx context.Context, id, username, email string, expirationT
 		Token: ss,
 		Err:   err,
 	}
+	close(tokenChan)
 }

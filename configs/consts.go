@@ -30,13 +30,16 @@ var ServiceCodes = map[int]string{
 	1023: "password is required.",
 	1024: "password must have more than 8 and less than 25 characters, 1 uppercase, 1 lowercase and 1 special character.",
 	1025: "unexpected error occured. failed to check password, please try with a different one.",
+	1026: "unable to read input.",
+	1027: "credentials are required to login.",
+	1028: "username is not registered.",
+	1029: "password didn't match.",
 
-
-	// DB ERRORS
 	2001:"unexpected error occured. Failed to register user",
 
 
 	5000: "unexpected error occured. please contact admin.",
+	5001: "request timed out. Please try again later.",
 }
 
 var AllowedImagesExt = map[string]bool{

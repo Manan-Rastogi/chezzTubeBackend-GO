@@ -29,4 +29,5 @@ func (ur userRouter) InitializeUserRouter() {
 	// All Endpoints of user
 	user.GET("/id/:id", userController.GetUserById)
 	user.POST("/register", userController.RegisterUser)
+	user.POST("/login", userController.Login)
 }
