@@ -34,7 +34,8 @@ var ServiceCodes = map[int]string{
 	1027: "credentials are required to login.",
 	1028: "username is not registered.",
 	1029: "password didn't match.",
-
+	1030: "invalid accessToken.",
+	1031: "invalid refreshToken.",
 	2001:"unexpected error occured. Failed to register user",
 
 

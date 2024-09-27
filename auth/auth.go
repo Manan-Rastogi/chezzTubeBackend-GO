@@ -63,3 +63,5 @@ func CreateNewToken(ctx context.Context, id, username, email string, expirationT
 	}
 	close(tokenChan)
 }
+
+

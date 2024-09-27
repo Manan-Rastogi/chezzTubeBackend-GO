@@ -2,6 +2,7 @@ package routers
 
 import (
 	"github.com/Manan-Rastogi/chezzTubeBackend-GO/controllers"
+	"github.com/Manan-Rastogi/chezzTubeBackend-GO/middlewares"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,4 +31,5 @@ func (ur userRouter) InitializeUserRouter() {
 	user.GET("/id/:id", userController.GetUserById)
 	user.POST("/register", userController.RegisterUser)
 	user.POST("/login", userController.Login)
+	user.PATCH("/change_password", middlewares.ValidateSession(), userController.ChangePassword)
 }

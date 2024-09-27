@@ -25,7 +25,11 @@ import (
 type UserController interface {
 	RegisterUser(ctx *gin.Context)
 	Login(ctx *gin.Context)
+	ChangePassword(ctx *gin.Context)
+	UpdateAvatarOrCoverImage(ctx *gin.Context)
 	GetUserById(ctx *gin.Context)
+
+	Logout(ctx *gin.Context)
 }
 
 type userController struct {
@@ -363,6 +367,37 @@ func (c *userController) Login(ctx *gin.Context) {
 	respond(ctx, response, http.StatusOK, 1)
 }
 
+func (c *userController) ChangePassword(ctx *gin.Context) {
+	// 1. User is already loggedin - check via middleware [DONE]
+	// 2. Email oldPassword NewPassword ConfirmNewPassword inps required
+	// 3. check newPass == confirmPass
+	// 3b. Check in DB - email and oldPassword
+	// 4. In meantime we can match newPass && confirmNewPass && hash it
+	// 5. Password is retrieved, now match password first. If success
+	// 6. Update NewPassword in DB and return success
+	// NOTE: 4th point can be a waste of resources if old password didn't match but will save us time in othercases. So this decision is dependent on us, what we want to use. 
+}
+
+func (c *userController) UpdateAvatarOrCoverImage(ctx *gin.Context){
+	// 1. User is already loggedin - check via middleware [DONE]
+	// 2. which files are present - cover or avatar or both
+	// 3. get user data from DB.
+	// 4. In meantime upload files to cloudinary
+	// 5. Update the files urls in DB
+	// 6. In meantime Delete oldurls from cloudinary.
+	// 7. Return Updated user Data
+	// NOTE: Point 6 is optional as some companies might want to keep data for ML/AI training Or user want to use old image again [altough we are not storing thee in arrays and our naming convention use username as publicId]. This is also a decision company will take instead of individual developer.
+}
+
 func (uc *userController) GetUserById(ctx *gin.Context) {
 
+}
+
+
+func (c *userController) Logout(ctx *gin.Context) {
+	// 1. User is already loggedin - check via middleware [DONE]
+	// 2. unset cookies
+	// 3. update expiretime of accessToken && refreshToken to currTime
+	// 4. unset refreshToken from db
+	// 5. return logout success with No userdetails
 }
